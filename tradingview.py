@@ -1,5 +1,5 @@
 import os
-from replit import db
+import json
 import config
 import requests
 import platform
@@ -7,19 +7,21 @@ from urllib3 import encode_multipart_formdata
 from datetime import datetime, timezone
 import helper
 
+# Simple in-memory session store (replaces replit db)
+_session_store = {}
 
 class tradingview:
 
   def __init__(self):
-    print('Getting sessionid from db')
-    self.sessionid = db["sessionid"] if 'sessionid' in db.keys() else 'abcd'
+    print('Getting sessionid from store')
+    self.sessionid = _session_store.get('sessionid', os.environ.get('TV_SESSION_ID', 'abcd'))
 
     headers = {'cookie': 'sessionid=' + self.sessionid}
     test = requests.request("GET", config.urls["tvcoins"], headers=headers)
     print(test.text)
-    print('sessionid from db : ' + self.sessionid)
+    print('sessionid from store : ' + self.sessionid)
     if test.status_code != 200:
-      print('session id from db is invalid')
+      print('session id from store is invalid')
       username = os.environ['tvusername']
       password = os.environ['tvpassword']
 
@@ -34,12 +36,13 @@ class tradingview:
         'Content-Type': contentType,
         'referer': 'https://www.tradingview.com'
       }
+
       login = requests.post(config.urls["signin"],
                             data=body,
                             headers=login_headers)
       cookies = login.cookies.get_dict()
       self.sessionid = cookies["sessionid"]
-      db["sessionid"] = self.sessionid
+      _session_store["sessionid"] = self.sessionid
 
   def validate_username(self, username):
     users = requests.get(config.urls["username_hint"] + "?s=" + username)
@@ -54,7 +57,6 @@ class tradingview:
 
   def get_access_details(self, username, pine_id):
     user_payload = {'pine_id': pine_id, 'username': username}
-
     user_headers = {
       'origin': 'https://www.tradingview.com',
       'Content-Type': 'application/x-www-form-urlencoded',
@@ -68,7 +70,6 @@ class tradingview:
     userResponseJson = usersResponse.json()
     print(userResponseJson)
     users = userResponseJson['results']
-
     access_details = user_payload
     hasAccess = False
     noExpiration = False
@@ -81,7 +82,6 @@ class tradingview:
           expiration = user['expiration']
         else:
           noExpiration = True
-
     access_details['hasAccess'] = hasAccess
     access_details['noExpiration'] = noExpiration
     access_details['currentExpiration'] = expiration
@@ -106,9 +106,7 @@ class tradingview:
         access_details['noExpiration'] = True
       enpoint_type = 'modify_access' if access_details[
         'hasAccess'] else 'add_access'
-
       body, contentType = encode_multipart_formdata(payload)
-
       headers = {
         'origin': 'https://www.tradingview.com',
         'Content-Type': contentType,
@@ -128,7 +126,6 @@ class tradingview:
       'username_recip': access_details['username']
     }
     body, contentType = encode_multipart_formdata(payload)
-
     headers = {
       'origin': 'https://www.tradingview.com',
       'Content-Type': contentType,
