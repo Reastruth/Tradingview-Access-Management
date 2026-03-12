@@ -24,6 +24,8 @@ def access(username):
   try:
     jsonPayload = request.json
     pine_ids = jsonPayload.get('pine_ids')
+            if isinstance(pine_ids, str):
+            pine_ids = [p.strip() for p in pine_ids.split(',')]
     print(jsonPayload)
     print(pine_ids)
     tv = tradingview()
